@@ -1,0 +1,32 @@
+{
+  "name": "nodejs-api-scalability-lab",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "verify": "node scripts/verify-api.js",
+    "seed": "node scripts/seed-products.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github-sanjaycoder01:sanjaycoder01/nodejs-api-scalability-lab.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "mongodb": "^7.7.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
