@@ -2,12 +2,14 @@ require("dotenv").config();
 
 const { connectDB, client } = require("./config/mongodb");
 const { ensureProductIndexes } = require("./models/products.model");
+const { ensureOrderIndexes } = require("./models/orders.model");
 const { createApp } = require("./app");
 
 async function startServer() {
   try {
     const db = await connectDB();
     await ensureProductIndexes(db);
+    await ensureOrderIndexes(db);
     const app = createApp(db);
 
     const server = app.listen(process.env.PORT || 3000, () => {

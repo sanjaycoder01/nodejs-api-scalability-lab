@@ -110,43 +110,6 @@ function buildListFilter({ category, minPrice, maxPrice } = {}) {
   return filter;
 }
 
-const SORT_OPTIONS = {
-  productId: { productId: 1 },
-  "-productId": { productId: -1 },
-  name: { name: 1, productId: 1 },
-  "-name": { name: -1, productId: 1 },
-  createdAt: { createdAt: 1, productId: 1 },
-  "-createdAt": { createdAt: -1, productId: 1 },
-  price: { price: 1, productId: 1 },
-  "-price": { price: -1, productId: 1 },
-  category: { category: 1, productId: 1 },
-  "-category": { category: -1, productId: 1 },
-};
-
-function resolveSort(sortParam) {
-  if (sortParam === undefined || sortParam === null || sortParam === "") {
-    return {
-      key: "productId",
-      sort: SORT_OPTIONS.productId,
-      supportsCursor: true,
-    };
-  }
-
-  const key = String(sortParam);
-  const sort = SORT_OPTIONS[key];
-
-  if (!sort) {
-    return { error: `Invalid sort. Allowed: ${Object.keys(SORT_OPTIONS).join(", ")}` };
-  }
-
-  return {
-    key,
-    sort,
-    // Keyset cursor is productId-based; only safe with productId ascending.
-    supportsCursor: key === "productId",
-  };
-}
-
 function validateProductInput(input) {
   const errors = [];
 
@@ -219,13 +182,11 @@ module.exports = {
   PRODUCT_INDEXES,
   DEFAULT_LIMIT,
   MAX_LIMIT,
-  SORT_OPTIONS,
   getProductsCollection,
   ensureProductIndexes,
   buildSearchFilter,
   buildTextSearchFilter,
   buildListFilter,
-  resolveSort,
   validateProductInput,
   buildProductDocument,
 };

@@ -8,6 +8,9 @@ function createProductsRoutes(productsService) {
   const controller = createProductsController(productsService);
 
   router.get("/", controller.getProducts);
+  router.get("/search", controller.searchProducts);
+  // Static path before /:id so "categories" is not treated as a productId.
+  router.get("/categories", controller.getCategories);
   router.post("/", controller.createProduct);
   router.get("/:id", controller.getProductById);
 

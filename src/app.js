@@ -1,6 +1,8 @@
 const express = require("express");
 const { createProductsService } = require("./services/products.service");
 const { createProductsRoutes } = require("./routes/products.routes");
+const { createOrdersService } = require("./services/orders.service");
+const { createOrdersRoutes } = require("./routes/orders.routes");
 
 function createApp(db) {
   const app = express();
@@ -12,8 +14,10 @@ function createApp(db) {
   });
 
   const productsService = createProductsService(db);
+  const ordersService = createOrdersService(db);
 
   app.use("/products", createProductsRoutes(productsService));
+  app.use("/orders", createOrdersRoutes(ordersService));
 
   app.use((err, req, res, next) => {
     console.error(err);

@@ -1,15 +1,7 @@
-const {
-  DEFAULT_LIMIT,
-  MAX_LIMIT,
-  resolveSort,
-} = require("../models/products.model");
+const { DEFAULT_LIMIT, MAX_LIMIT } = require("../models/products.model");
 
 function parseLimit(raw) {
   return Number(raw ?? DEFAULT_LIMIT);
-}
-
-function parseOffset(raw) {
-  return Number(raw ?? 0);
 }
 
 function parseOptionalNumber(raw, name) {
@@ -21,23 +13,35 @@ function parseOptionalNumber(raw, name) {
   return { value };
 }
 
-function validatePagination({ offset, limit, cursor, cursorProvided }) {
+/**
+ * Cursor is optional (omit on first page).
+ * If `cursor` is present it must be a non-empty string (last productId).
+ * `offset` is rejected — use cursor instead.
+ */
+function parseCursorPagination(query) {
+  if (Object.prototype.hasOwnProperty.call(query, "offset")) {
+    return {
+      error:
+        "offset pagination is not supported; use cursor (pass nextCursor from the previous response)",
+    };
+  }
+
+  const limit = parseLimit(query.limit);
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-    return "Invalid limit";
+    return { error: "Invalid limit" };
   }
 
-  if (cursorProvided) {
-    if (typeof cursor !== "string" || cursor.trim().length === 0) {
-      return "Invalid cursor";
-    }
-    return null;
+  const cursorProvided = Object.prototype.hasOwnProperty.call(query, "cursor");
+  if (!cursorProvided) {
+    return { limit, cursor: undefined };
   }
 
-  if (!Number.isInteger(offset) || offset < 0) {
-    return "Invalid offset";
+  const cursor = String(query.cursor).trim();
+  if (!cursor) {
+    return { error: "Invalid cursor" };
   }
 
-  return null;
+  return { limit, cursor };
 }
 
 function createProductsController(productsService) {
@@ -46,9 +50,7 @@ function createProductsController(productsService) {
       const product = await productsService.getProductById(req.params.id);
 
       if (!product) {
-        return res.status(404).json({
-          message: "Product not found",
-        });
+        return res.status(404).json({ message: "Product not found" });
       }
 
       res.json(product);
@@ -59,22 +61,9 @@ function createProductsController(productsService) {
 
   async function getProducts(req, res, next) {
     try {
-      const cursorProvided = Object.prototype.hasOwnProperty.call(
-        req.query,
-        "cursor"
-      );
-      const cursor = cursorProvided ? String(req.query.cursor) : undefined;
-      const offset = parseOffset(req.query.offset);
-      const limit = parseLimit(req.query.limit);
-
-      const paginationError = validatePagination({
-        offset,
-        limit,
-        cursor,
-        cursorProvided,
-      });
-      if (paginationError) {
-        return res.status(400).json({ message: paginationError });
+      const pagination = parseCursorPagination(req.query);
+      if (pagination.error) {
+        return res.status(400).json({ message: pagination.error });
       }
 
       const category =
@@ -110,65 +99,23 @@ function createProductsController(productsService) {
         });
       }
 
-      const sortResolved = resolveSort(req.query.sort);
-      if (sortResolved.error) {
-        return res.status(400).json({ message: sortResolved.error });
-      }
+      const { data, nextCursor } = await productsService.getProducts({
+        cursor: pagination.cursor,
+        limit: pagination.limit,
+        category,
+        minPrice,
+        maxPrice,
+      });
 
-      if (cursorProvided && !sortResolved.supportsCursor) {
-        return res.status(400).json({
-          message:
-            "cursor pagination requires sort=productId (default). Use offset with other sort values.",
-        });
-      }
-
-      // No explicit sort + category filter → order by category/price so
-      // idx_category_price can be used (productId sort blocks that index).
-      const sortProvided =
-        typeof req.query.sort === "string" && req.query.sort.trim().length > 0;
-      let listSort = sortResolved.sort;
-      let listSortKey = sortResolved.key;
-      if (!cursorProvided && category && !sortProvided) {
-        listSort = { category: 1, price: 1 };
-        listSortKey = "category,price";
-      }
-
-      const { data, nextCursor } = await productsService.getProducts(
-        cursorProvided
-          ? {
-              cursor: cursor.trim(),
-              limit,
-              category,
-              minPrice,
-              maxPrice,
-              sort: listSort,
-            }
-          : {
-              offset,
-              limit,
-              category,
-              minPrice,
-              maxPrice,
-              sort: listSort,
-            }
-      );
-
-      const meta = {
-        limit,
+      res.json({
+        limit: pagination.limit,
         count: data.length,
         nextCursor,
-        sort: listSortKey,
         ...(category ? { category } : {}),
         ...(minPrice !== undefined ? { minPrice } : {}),
         ...(maxPrice !== undefined ? { maxPrice } : {}),
         data,
-      };
-
-      if (cursorProvided) {
-        return res.json(meta);
-      }
-
-      res.json({ offset, ...meta });
+      });
     } catch (error) {
       next(error);
     }
@@ -192,7 +139,8 @@ function createProductsController(productsService) {
 
       const modeRaw =
         typeof req.query.mode === "string" ? req.query.mode.trim() : "text";
-      const mode = modeRaw === "text" ? "text" : modeRaw === "regex" ? "regex" : null;
+      const mode =
+        modeRaw === "text" ? "text" : modeRaw === "regex" ? "regex" : null;
 
       if (!mode) {
         return res.status(400).json({
@@ -200,51 +148,37 @@ function createProductsController(productsService) {
         });
       }
 
-      const cursorProvided = Object.prototype.hasOwnProperty.call(
-        req.query,
-        "cursor"
-      );
-      const cursor = cursorProvided ? String(req.query.cursor) : undefined;
-      const offset = parseOffset(req.query.offset);
-      const limit = parseLimit(req.query.limit);
+      const pagination = parseCursorPagination(req.query);
+      if (pagination.error) {
+        return res.status(400).json({ message: pagination.error });
+      }
 
-      const validationError = validatePagination({
-        offset,
-        limit,
-        cursor,
-        cursorProvided,
+      // Same cursor contract as GET /products: omit cursor on page 1,
+      // then pass nextCursor until it comes back null.
+      const { data, nextCursor } = await productsService.searchProducts({
+        q,
+        mode,
+        cursor: pagination.cursor,
+        limit: pagination.limit,
       });
-
-      if (validationError) {
-        return res.status(400).json({ message: validationError });
-      }
-
-      const { data, nextCursor } = await productsService.searchProducts(
-        cursorProvided
-          ? { q, cursor: cursor.trim(), limit, mode }
-          : { q, offset, limit, mode }
-      );
-
-      if (cursorProvided) {
-        return res.json({
-          q,
-          mode,
-          limit,
-          count: data.length,
-          nextCursor,
-          data,
-        });
-      }
 
       res.json({
         q,
         mode,
-        offset,
-        limit,
+        limit: pagination.limit,
         count: data.length,
         nextCursor,
         data,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async function getCategories(req, res, next) {
+    try {
+      const data = await productsService.getCategoryAnalytics();
+      res.json({ count: data.length, data });
     } catch (error) {
       next(error);
     }
@@ -265,7 +199,13 @@ function createProductsController(productsService) {
     }
   }
 
-  return { getProductById, getProducts, searchProducts, createProduct };
+  return {
+    getProductById,
+    getProducts,
+    searchProducts,
+    getCategories,
+    createProduct,
+  };
 }
 
 module.exports = { createProductsController };

@@ -33,17 +33,11 @@ async function main() {
     });
 
     await check(
-      "GET /products offset pagination",
+      "GET /products rejects offset",
       "/products?offset=0&limit=20",
       (res, body) => {
-        if (res.status !== 200) throw new Error(`status ${res.status}`);
-        if (
-          body.offset !== 0 ||
-          body.limit !== 20 ||
-          typeof body.count !== "number" ||
-          !Array.isArray(body.data) ||
-          !("nextCursor" in body)
-        ) {
+        if (res.status !== 400) throw new Error(`status ${res.status}`);
+        if (!/cursor/i.test(body.message || "")) {
           throw new Error(`unexpected body ${JSON.stringify(body)}`);
         }
       }
@@ -65,7 +59,12 @@ async function main() {
       "/products?limit=5",
       (res, body) => {
         if (res.status !== 200) throw new Error(`status ${res.status}`);
-        if (body.limit !== 5 || body.data.length > 5) {
+        if (
+          body.limit !== 5 ||
+          body.data.length > 5 ||
+          !("nextCursor" in body) ||
+          Object.prototype.hasOwnProperty.call(body, "offset")
+        ) {
           throw new Error(`unexpected body ${JSON.stringify(body)}`);
         }
         if (body.data.length === 5 && !body.nextCursor) {
@@ -82,6 +81,30 @@ async function main() {
           if (res.status !== 200) throw new Error(`status ${res.status}`);
           if (body.data[0]?.productId === page1.data[0]?.productId) {
             throw new Error("cursor page overlapped with previous page");
+          }
+        }
+      );
+    }
+
+    const searchPage1 = await check(
+      "GET /products/search cursor page 1",
+      "/products/search?q=phone&limit=5",
+      (res, body) => {
+        if (res.status !== 200) throw new Error(`status ${res.status}`);
+        if (body.mode !== "text" || !("nextCursor" in body)) {
+          throw new Error(`unexpected body ${JSON.stringify(body)}`);
+        }
+      }
+    );
+
+    if (searchPage1.nextCursor) {
+      await check(
+        "GET /products/search cursor page 2",
+        `/products/search?q=phone&limit=5&cursor=${encodeURIComponent(searchPage1.nextCursor)}`,
+        (res, body) => {
+          if (res.status !== 200) throw new Error(`status ${res.status}`);
+          if (body.data[0]?.productId === searchPage1.data[0]?.productId) {
+            throw new Error("search cursor page overlapped with previous page");
           }
         }
       );
@@ -121,6 +144,27 @@ async function main() {
     );
 
     await check(
+      "GET /products/categories",
+      "/products/categories",
+      (res, body) => {
+        if (res.status !== 200) throw new Error(`status ${res.status}`);
+        if (!Array.isArray(body.data) || typeof body.count !== "number") {
+          throw new Error(`unexpected body ${JSON.stringify(body)}`);
+        }
+        if (body.data.length > 0) {
+          const row = body.data[0];
+          if (
+            typeof row.category !== "string" ||
+            typeof row.totalProducts !== "number" ||
+            typeof row.averagePrice !== "number"
+          ) {
+            throw new Error(`unexpected row ${JSON.stringify(row)}`);
+          }
+        }
+      }
+    );
+
+    await check(
       "GET /products?category=",
       "/products?category=electronics&limit=10",
       (res, body) => {
@@ -146,28 +190,6 @@ async function main() {
           )
         ) {
           throw new Error("price/category filter returned wrong rows");
-        }
-      }
-    );
-
-    await check(
-      "GET /products sort=-createdAt",
-      "/products?sort=-createdAt&limit=5",
-      (res, body) => {
-        if (res.status !== 200) throw new Error(`status ${res.status}`);
-        if (body.sort !== "-createdAt") {
-          throw new Error(`unexpected body ${JSON.stringify(body)}`);
-        }
-      }
-    );
-
-    await check(
-      "GET /products sort=name",
-      "/products?sort=name&limit=5",
-      (res, body) => {
-        if (res.status !== 200) throw new Error(`status ${res.status}`);
-        if (body.sort !== "name") {
-          throw new Error(`unexpected body ${JSON.stringify(body)}`);
         }
       }
     );
