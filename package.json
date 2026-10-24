@@ -11,7 +11,20 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "verify": "node scripts/verify-api.js",
-    "seed": "node scripts/seed-products.js"
+    "explain": "node scripts/explain-queries.js",
+    "seed": "node scripts/seed-products.js",
+    "mongo:up": "docker compose up -d",
+    "mongo:down": "docker compose down",
+    "seed:clear": "node scripts/seed-products.js --clear",
+    "k6:stack:up": "docker compose -f docker-compose.k6.yml up -d",
+    "k6:stack:down": "docker compose -f docker-compose.k6.yml down",
+    "k6:smoke": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 grafana/k6 run /scripts/smoke.js",
+    "k6:baseline": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 grafana/k6 run --out influxdb=http://host.docker.internal:8086/k6 /scripts/baseline.js",
+    "k6:baseline:local": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 grafana/k6 run /scripts/baseline.js",
+    "k6:cursor": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 -e LIMIT=50 grafana/k6 run --out influxdb=http://host.docker.internal:8086/k6 /scripts/cursor-pagination.js",
+    "k6:cursor:local": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 -e LIMIT=50 grafana/k6 run /scripts/cursor-pagination.js",
+    "k6:round2": "mkdir -p reports && docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -v \"${PWD}/reports:/reports\" -e BASE_URL=http://host.docker.internal:3000 grafana/k6 run --out influxdb=http://host.docker.internal:8086/k6 --summary-export=/reports/round2-summary.json /scripts/round2.js",
+    "k6:round2:local": "mkdir -p reports && docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -v \"${PWD}/reports:/reports\" -e BASE_URL=http://host.docker.internal:3000 grafana/k6 run --summary-export=/reports/round2-summary.json /scripts/round2.js"
   },
   "repository": {
     "type": "git",
