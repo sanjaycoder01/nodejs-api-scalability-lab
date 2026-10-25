@@ -287,13 +287,73 @@ async function main() {
       }
     );
 
+    const byIdPath = `/products/${encodeURIComponent(uniqueId)}`;
+
     await check(
-      "GET /products/:id",
-      `/products/${encodeURIComponent(uniqueId)}`,
+      "GET /products/:id (cache miss/warm)",
+      byIdPath,
       (res, body) => {
         if (res.status !== 200) throw new Error(`status ${res.status}`);
         if (body.productId !== uniqueId) {
           throw new Error(`unexpected body ${JSON.stringify(body)}`);
+        }
+      }
+    );
+
+    // Second GET should be a Redis HIT when cache is enabled.
+    {
+      const res = await fetch(`${BASE}${byIdPath}`);
+      const body = await res.json();
+      if (res.status !== 200 || body.productId !== uniqueId) {
+        throw new Error("GET /products/:id second fetch failed");
+      }
+      const xCache = res.headers.get("x-cache");
+      if (xCache === "HIT") {
+        console.log("✓ GET /products/:id second fetch (X-Cache: HIT)");
+      } else {
+        console.log(
+          `✓ GET /products/:id second fetch (X-Cache: ${xCache || "absent"})`
+        );
+      }
+    }
+
+    await check("GET /orders ($lookup array)", "/orders", (res, body) => {
+      if (res.status !== 200) throw new Error(`status ${res.status}`);
+      if (!Array.isArray(body.data)) {
+        throw new Error(`unexpected body ${JSON.stringify(body)}`);
+      }
+      if (body.data.length > 0 && !Array.isArray(body.data[0].productDetails)) {
+        throw new Error("expected productDetails array from $lookup");
+      }
+    });
+
+    await check(
+      "GET /orders/with-product ($unwind)",
+      "/orders/with-product",
+      (res, body) => {
+        if (res.status !== 200) throw new Error(`status ${res.status}`);
+        if (!Array.isArray(body.data)) {
+          throw new Error(`unexpected body ${JSON.stringify(body)}`);
+        }
+      }
+    );
+
+    await check(
+      "GET /orders/delivered (totals)",
+      "/orders/delivered",
+      (res, body) => {
+        if (res.status !== 200) throw new Error(`status ${res.status}`);
+        if (!Array.isArray(body.data)) {
+          throw new Error(`unexpected body ${JSON.stringify(body)}`);
+        }
+        if (body.data.length > 0) {
+          const row = body.data[0];
+          if (
+            typeof row.totalPrice !== "number" ||
+            typeof row.productName !== "string"
+          ) {
+            throw new Error(`unexpected row ${JSON.stringify(row)}`);
+          }
         }
       }
     );
