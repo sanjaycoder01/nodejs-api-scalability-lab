@@ -15,7 +15,14 @@
     "seed": "node scripts/seed-products.js",
     "mongo:up": "docker compose up -d",
     "mongo:down": "docker compose down",
+    "redis:up": "docker compose up -d redis",
+    "redis:down": "docker compose stop redis",
+    "test:redis": "node scripts/test-redis.js",
+    "k6:cache": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 -e PRODUCT_ID=prod-002 grafana/k6 run --out influxdb=http://host.docker.internal:8086/k6 /scripts/get-by-id-cache.js",
+    "k6:cache:local": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 -e PRODUCT_ID=prod-002 grafana/k6 run /scripts/get-by-id-cache.js",
     "seed:clear": "node scripts/seed-products.js --clear",
+    "seed:orders": "node scripts/seed-orders.js",
+    "seed:orders:clear": "node scripts/seed-orders.js --clear",
     "k6:stack:up": "docker compose -f docker-compose.k6.yml up -d",
     "k6:stack:down": "docker compose -f docker-compose.k6.yml down",
     "k6:smoke": "docker run --rm --add-host=host.docker.internal:host-gateway -v \"${PWD}/k6:/scripts\" -e BASE_URL=http://host.docker.internal:3000 grafana/k6 run /scripts/smoke.js",
@@ -37,7 +44,8 @@
   "dependencies": {
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
-    "mongodb": "^7.7.0"
+    "mongodb": "^7.7.0",
+    "redis": "^6.3.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

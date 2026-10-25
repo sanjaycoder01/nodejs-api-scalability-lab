@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const { connectDB, client } = require("./config/mongodb");
+const { connectRedis, disconnectRedis } = require("./config/redis");
 const { ensureProductIndexes } = require("./models/products.model");
 const { ensureOrderIndexes } = require("./models/orders.model");
 const { createApp } = require("./app");
@@ -8,6 +9,7 @@ const { createApp } = require("./app");
 async function startServer() {
   try {
     const db = await connectDB();
+    await connectRedis();
     await ensureProductIndexes(db);
     await ensureOrderIndexes(db);
     const app = createApp(db);
@@ -18,7 +20,7 @@ async function startServer() {
 
     async function shutdown() {
       server.close(async () => {
-        await client.close();
+        await Promise.allSettled([client.close(), disconnectRedis()]);
         process.exit(0);
       });
     }
@@ -27,7 +29,7 @@ async function startServer() {
     process.on("SIGINT", shutdown);
   } catch (error) {
     console.error("Failed to start server:", error);
-    await client.close().catch(() => {});
+    await Promise.allSettled([client.close(), disconnectRedis()]);
     process.exit(1);
   }
 }

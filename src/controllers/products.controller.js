@@ -47,12 +47,16 @@ function parseCursorPagination(query) {
 function createProductsController(productsService) {
   async function getProductById(req, res, next) {
     try {
-      const product = await productsService.getProductById(req.params.id);
+      const { product, cache } = await productsService.getProductById(
+        req.params.id
+      );
 
       if (!product) {
         return res.status(404).json({ message: "Product not found" });
       }
 
+      // Lab observability: HIT = served from Redis, MISS = Mongo then cached.
+      res.set("X-Cache", cache);
       res.json(product);
     } catch (error) {
       next(error);

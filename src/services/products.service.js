@@ -8,6 +8,11 @@ const {
   buildTextSearchFilter,
   buildListFilter,
 } = require("../models/products.model");
+const {
+  getCachedProduct,
+  setCachedProduct,
+  invalidateProductCache,
+} = require("../cache/productCache");
 
 /**
  * Cursor (keyset) pagination:
@@ -22,11 +27,33 @@ const {
 function createProductsService(db) {
   const products = getProductsCollection(db);
 
+  /**
+   * Cache-aside for GET /products/:id
+   *
+   *   1. Redis GET product:<id>  → HIT  → return JSON (skip Mongo)
+   *   2. Miss → Mongo findOne
+   *   3. If found → Redis SET with TTL, then return
+   *
+   * @returns {{ product: object|null, cache: 'HIT'|'MISS'|'BYPASS' }}
+   */
   async function getProductById(id) {
-    return products.findOne(
+    const cached = await getCachedProduct(id);
+    console.log("cached", cached);
+    if (cached) {
+      return { product: cached, cache: "HIT" };
+    }
+
+    const product = await products.findOne(
       { productId: id },
       { projection: PRODUCT_PROJECTION }
     );
+
+    if (!product) {
+      return { product: null, cache: "MISS" };
+    }
+
+    await setCachedProduct(id, product);
+    return { product, cache: "MISS" };
   }
 
   /**
@@ -139,6 +166,11 @@ function createProductsService(db) {
     }
 
     const { _id, ...product } = doc;
+
+    // New row: drop any stale key, then warm cache so the next GET is a HIT.
+    await invalidateProductCache(product.productId);
+    await setCachedProduct(product.productId, product);
+
     return product;
   }
 
