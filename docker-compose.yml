@@ -28,6 +28,64 @@ services:
       timeout: 3s
       retries: 5
 
+  configsvr:
+    image: mongo:7
+    container_name: sharding-configsvr
+    command: ["mongod", "--configsvr", "--replSet", "configReplSet", "--port", "27019", "--bind_ip_all"]
+    volumes:
+      - configsvr-data:/data/configdb
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27019", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  shard1:
+    image: mongo:7
+    container_name: sharding-shard1
+    command: ["mongod", "--shardsvr", "--replSet", "shard1ReplSet", "--port", "27018", "--bind_ip_all"]
+    volumes:
+      - shard1-data:/data/db
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27018", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  shard2:
+    image: mongo:7
+    container_name: sharding-shard2
+    command: ["mongod", "--shardsvr", "--replSet", "shard2ReplSet", "--port", "27018", "--bind_ip_all"]
+    volumes:
+      - shard2-data:/data/db
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27018", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mongos:
+    image: mongo:7
+    container_name: sharding-mongos
+    command: ["mongos", "--configdb", "configReplSet/configsvr:27019", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - "27018:27017"
+    networks:
+      - default
+    depends_on:
+      - configsvr
+      - shard1
+      - shard2
+
 volumes:
   mongo-lab-data:
   redis_data:
+  configsvr-data:
+  shard1-data:
+  shard2-data:
